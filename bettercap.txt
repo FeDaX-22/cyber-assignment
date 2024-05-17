@@ -1,0 +1,127 @@
+BetterCAP is a powerful, flexible tool used for network security assessments, including man-in-the-middle attacks, network monitoring, and more. Below is a detailed step-by-step guide for setting up and using BetterCAP.
+
+Step 1: Setting Up BetterCAP
+Install BetterCAP:
+BetterCAP can be installed on various systems. On Kali Linux, it's often pre-installed, but if not, you can install it via the following commands:
+
+
+sudo apt update
+sudo apt install bettercap
+Alternatively, you can use gem if you have Ruby installed:
+
+
+sudo gem install bettercap
+Or download the latest release from the BetterCAP GitHub repository.
+
+Update BetterCAP:
+Ensure you have the latest version by running:
+
+
+sudo bettercap -eval "caplets.update; ui.update; quit"
+Step 2: Running BetterCAP
+Start BetterCAP:
+Open a terminal and run BetterCAP with root privileges:
+
+
+sudo bettercap
+Basic Interface:
+When you start BetterCAP, you'll be greeted with a command-line interface (CLI).
+
+Interactive Session:
+You can start an interactive session by simply typing bettercap or use specific commands with arguments directly.
+
+Step 3: Using BetterCAP for Common Tasks
+Network Discovery:
+Discover devices on your network:
+
+
+net.probe on
+This will scan the network and list active devices.
+
+ARP Spoofing:
+To perform an ARP spoofing attack, enabling ARP spoofing is required:
+
+
+set arp.spoof.targets <target_ip>
+arp.spoof on
+Replace <target_ip> with the IP address of the target device. This makes the target believe your machine is the gateway.
+
+DNS Spoofing:
+To spoof DNS responses, configure and start the DNS spoofing module:
+
+
+set dns.spoof.all true
+dns.spoof on
+Alternatively, you can specify particular hosts:
+
+
+set dns.spoof.domains <domain>
+dns.spoof on
+HTTPS Downgrade:
+To downgrade HTTPS connections to HTTP (if applicable):
+
+
+https.proxy on
+https.proxy.sslstrip on
+https.proxy.sslstripf on
+Sniffing Traffic:
+To start sniffing network traffic:
+
+
+net.sniff on
+This will capture and display network packets in real-time.
+
+Wi-Fi Hacking:
+If you have a compatible wireless card, you can use BetterCAP for Wi-Fi hacking. Put your wireless card into monitor mode and start Wi-Fi discovery:
+
+
+wifi.recon on
+To deauthenticate clients from a specific network:
+
+
+wifi.deauth <AP_MAC> <CLIENT_MAC>
+Replace <AP_MAC> with the Access Point's MAC address and <CLIENT_MAC> with the target client's MAC address.
+
+Step 4: Using Caplets
+Caplets are scripts that automate BetterCAP tasks. You can find many pre-written caplets in the BetterCAP repository or write your own.
+
+Load a Caplet:
+Load a caplet by specifying its path:
+
+
+caplet <path_to_caplet>
+Example - hstshijack.cap:
+This caplet can help bypass HSTS protections:
+
+
+caplet hstshijack/hstshijack
+set hstshijack.targets <target_ip>
+hstshijack on
+Replace <target_ip> with the target device's IP address.
+
+Step 5: Stopping BetterCAP
+Stop Modules:
+To stop any running modules, use the corresponding off command, such as:
+
+
+net.probe off
+arp.spoof off
+dns.spoof off
+net.sniff off
+Exit BetterCAP:
+Simply type exit or quit to stop BetterCAP and return to your shell.
+
+
+exit
+Additional Tips
+Help and Documentation:
+Access BetterCAP's help and documentation directly from the CLI for detailed usage information:
+
+
+help
+help <module_name>
+Logs:
+BetterCAP can log output for later analysis. Set log file location and enable logging:
+
+set net.sniff.output /path/to/log.pcap
+net.sniff on

